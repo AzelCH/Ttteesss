@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deteksi Umur & Gender</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      text-align: center;
+      font-family: sans-serif;
+      margin: 0;
+    }
+    video {
+      border-radius: 10px;
+      margin-top: 20px;
+      width: 90%;
+      max-width: 480px;
+    }
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+    #result {
+      margin-top: 12px;
+      font-size: 1.2em;
+      background: #222;
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>AI Deteksi Umur & Gender</h2>
+  <video id="video" autoplay muted></video>
+  <div id="result">Memuat model...</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const result = document.getElementById('result');
+
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('models'),
+      faceapi.nets.ageGenderNet.loadFromUri('models')
+    ]).then(startVideo).catch(err => {
+      result.textContent = "Gagal load model: " + err;
+    });
+
+    function startVideo() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          video.srcObject = stream;
+        })
+        .catch(err => {
+          result.textContent = "Gagal akses kamera: " + err;
+        });
+    }
+
+    video.addEventListener('play', () => {
+      const canvas = faceapi.createCanvasFromMedia(video);
+      document.body.append(canvas);
+      const displaySize = { width: video.width, height: video.height };
+      faceapi.matchDimensions(canvas, displaySize);
+
+      setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
+        const resized = faceapi.resizeResults(detections, displaySize);
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        faceapi.draw.drawDetections(canvas, resized);
+
+        if (resized.length > 0) {
+          const { age, gender, genderProbability } = resized[0];
+          const usia = Math.round(age);
+          const kelamin = gender === "male" ? "Pria" : "Wanita";
+          result.textContent = `Perkiraan: ${kelamin}, ${usia} tahun`;
+        } else {
+          result.textContent = "Wajah tidak terdeteksi";
+        }
+      }, 2000);
+    });
+  </script>
+</body>
+</html>
