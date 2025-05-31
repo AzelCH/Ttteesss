@@ -1,23 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Gender & Age Detector</title>
-  <style>
-    body { margin: 0; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
-    video { border: 2px solid #333; margin-top: 20px; }
-    canvas { position: absolute; }
-    #status { margin-top: 10px; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Gender & Age Detector</title>
+<style>
+  body { text-align: center; font-family: sans-serif; margin: 20px; }
+  video { border: 2px solid #333; }
+  canvas { position: absolute; }
+</style>
 </head>
 <body>
   <h1>AI Gender & Age Detector</h1>
   <video id="video" width="640" height="480" autoplay muted></video>
   <div id="status">Loading models...</div>
 
-  <!-- Face API -->
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
-  <script defer src="script.js"></script>
+  <script>
+    const video = document.getElementById("video");
+    const status = document.getElementById("status");
+
+    async function loadModels() {
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri("models");
+        await faceapi.nets.ageGenderNet.loadFromUri("models");
+        status.textContent = "✅ Models loaded. Starting video...";
+        startVideo();
+      } catch (err) {
+        status.textContent = "❌ Failed to load models.";
+        console.error(err);
+      }
+    }
+
+    function startVideo() {
+      navigator.mediaDevices.getUserMedia({ video: {} })
+        .then(stream => {
+          video.srcObject = stream;
+          status.textContent = "🔍 Detecting...";
+        })
+        .catch(err => {
+          status.textContent = "❌ Cannot access camera.";
+          console.error(err);
+        });
+    }
+
+    video.addEventListener("play", () => {
+      const canvas = faceapi.createCanvasFromMedia(video);
+      document.body.append(canvas);
+      const displaySize = { width: video.width, height: video.height };
+      faceapi.matchDimensions(canvas, displaySize);
+
+      setInterval(async () => {
+        const detections = await faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withAgeAndGender();
+
+        const resized = faceapi.resizeResults(detections, displaySize);
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        resized.forEach(detection => {
+          const { age, gender, genderProbability } = detection;
+          const box = detection.detection.box;
+          const label = `${gender} (${(genderProbability*100).toFixed(1)}%) - Age: ${age.toFixed(1)}`;
+          new faceapi.draw.DrawBox(box, { label }).draw(canvas);
+        });
+      }, 500);
+    });
+
+    loadModels();
+  </script>
 </body>
 </html>
